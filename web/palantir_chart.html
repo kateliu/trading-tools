@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Palantir Price History</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Palantir Stock Price</h1>
+        <p>Interactive candlestick chart built from <code>palantir_prices.csv</code>.</p>
+    </header>
+
+    <main>
+        <section class="controls">
+            <div class="control-group">
+                <label for="range">Show:</label>
+                <select id="range">
+                    <option value="30">Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="180">Last 180 days</option>
+                    <option value="365" selected>Last 365 days</option>
+                    <option value="all">All data</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="indicators">Indicators:</label>
+                <select id="indicators">
+                    <option value="none" selected>None</option>
+                    <option value="sma">Simple Moving Averages (20 &amp; 50)</option>
+                    <option value="ema">Exponential Moving Averages (12 &amp; 26)</option>
+                    <option value="rsi">Relative Strength Index (14)</option>
+                </select>
+            </div>
+        </section>
+        <section id="chart-container">
+            <div id="chart"></div>
+        </section>
+        <section id="status" role="status" aria-live="polite"></section>
+    </main>
+
+    <script src="script.js?v=2"></script>
+</body>
+</html>
