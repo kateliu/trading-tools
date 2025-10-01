@@ -1,7 +1,7 @@
 (async function init() {
     const statusEl = document.getElementById("status");
     const rangeEl = document.getElementById("range");
-    const indicatorEl = document.getElementById("indicators" );
+    const indicatorEl = document.getElementById("indicators");
     let fullData = [];
     let sourcePath = "";
 
@@ -32,12 +32,14 @@
             clearChart();
         } else {
             statusEl.textContent = `Showing ${subset.length} rows from ${sourcePath}.`;
-            renderChart(subset, value, indicatorEl.value);
+            renderChart(subset, value, indicatorEl ? indicatorEl.value : "none");
         }
     }
 
     rangeEl.addEventListener("change", applyRangeSelection);
-    indicatorEl.addEventListener("change", applyRangeSelection);
+    if (indicatorEl) {
+        indicatorEl.addEventListener("change", applyRangeSelection);
+    }
     applyRangeSelection();
 })();
 
@@ -140,13 +142,15 @@ function renderChart(data, rangeLabel, indicator) {
         name: "Palantir (PLTR)",
     };
 
-    const overlays = buildIndicatorTraces(data, indicator);
+    const indicatorResult = buildIndicatorTraces(data, indicator);
+    const overlays = indicatorResult.traces;
+    const xAxisEnd = indicatorResult.extendX || data[data.length - 1].date;
 
     const layout = {
         title: `Palantir Stock Price — ${titleSuffix}`,
         margin: { l: 60, r: 60, t: 60, b: 40 },
         xaxis: {
-            range: [data[0].date, data[data.length - 1].date],
+            range: [data[0].date, xAxisEnd],
             rangeslider: { visible: true },
             type: "date",
         },
@@ -158,7 +162,7 @@ function renderChart(data, rangeLabel, indicator) {
         paper_bgcolor: "rgba(0,0,0,0)",
     };
 
-    if (indicator === "rsi") {
+    if (indicatorResult.usesSecondaryAxis) {
         layout.yaxis2 = {
             title: "RSI",
             overlaying: "y",
@@ -191,6 +195,14 @@ function renderChart(data, rangeLabel, indicator) {
         ];
     }
 
+    if (indicatorResult.shapes && indicatorResult.shapes.length) {
+        layout.shapes = (layout.shapes || []).concat(indicatorResult.shapes);
+    }
+
+    if (indicatorResult.annotations && indicatorResult.annotations.length) {
+        layout.annotations = indicatorResult.annotations;
+    }
+
     const config = {
         responsive: true,
         displaylogo: false,
@@ -211,25 +223,40 @@ function renderChart(data, rangeLabel, indicator) {
 }
 
 function buildIndicatorTraces(data, indicator) {
+    const result = {
+        traces: [],
+        extendX: null,
+        usesSecondaryAxis: false,
+        shapes: [],
+        annotations: [],
+    };
+
     if (!indicator || indicator === "none") {
-        return [];
+        return result;
     }
 
     switch (indicator) {
         case "sma":
-            return [
+            result.traces = [
                 makeLineTrace("SMA (20)", movingAverage(data, 20), "#1f77b4"),
                 makeLineTrace("SMA (50)", movingAverage(data, 50), "#ff7f0e"),
             ];
+            return result;
         case "ema":
-            return [
+            result.traces = [
                 makeLineTrace("EMA (12)", exponentialMovingAverage(data, 12), "#9467bd"),
                 makeLineTrace("EMA (26)", exponentialMovingAverage(data, 26), "#8c564b"),
             ];
+            return result;
         case "rsi":
-            return [relativeStrengthTrace(data, 14)];
+            result.traces = [relativeStrengthTrace(data, 14)];
+            result.usesSecondaryAxis = true;
+            return result;
+        case "ai":
+            addForecastTrace(data, result);
+            return result;
         default:
-            return [];
+            return result;
     }
 }
 
@@ -307,6 +334,123 @@ function relativeStrengthTrace(data, period) {
 function average(values) {
     if (!values.length) return 0;
     return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function addForecastTrace(data, result) {
+    if (data.length < 2) {
+        return;
+    }
+
+    const horizon = 30;
+    const forecast = linearRegressionForecast(data, horizon);
+    if (!forecast.points.length) {
+        return;
+    }
+
+    const lastActual = data[data.length - 1];
+    const forecastTrace = makeForecastTrace(lastActual, forecast.points);
+    result.traces.push(forecastTrace);
+    result.extendX = forecast.points[forecast.points.length - 1].date;
+
+    result.shapes.push({
+        type: "rect",
+        xref: "x",
+        x0: lastActual.date,
+        x1: result.extendX,
+        yref: "paper",
+        y0: 0,
+        y1: 1,
+        fillcolor: "rgba(255, 20, 147, 0.07)",
+        line: { width: 0 },
+    });
+
+    const trendText = buildTrendText(forecast.slope);
+    const midPoint = forecast.points[Math.floor(forecast.points.length / 2)];
+    result.annotations.push({
+        x: midPoint.date,
+        y: midPoint.value,
+        xref: "x",
+        yref: "y",
+        text: `AI trend: ${trendText}`,
+        showarrow: false,
+        bgcolor: "rgba(255, 20, 147, 0.08)",
+        bordercolor: "rgba(255, 20, 147, 0.25)",
+        borderwidth: 1,
+        font: { color: "#ff1493", size: 12 },
+        align: "left",
+    });
+}
+
+function makeForecastTrace(lastPoint, forecastPoints) {
+    const x = [lastPoint.date, ...forecastPoints.map(point => point.date)];
+    const y = [lastPoint.close, ...forecastPoints.map(point => point.value)];
+    return {
+        type: "scatter",
+        mode: "lines",
+        x,
+        y,
+        name: "AI Forecast (30d)",
+        line: { color: "#ff1493", width: 2, dash: "dash" },
+        hovertemplate: "%{x}<br>%{y:.2f} USD<extra>AI Forecast</extra>",
+        yaxis: "y",
+    };
+}
+
+function linearRegressionForecast(data, horizon) {
+    const n = data.length;
+    if (n < 2) {
+        return { points: [], slope: 0, intercept: data[0] ? data[0].close : 0 };
+    }
+
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumX2 = 0;
+    for (let i = 0; i < n; i += 1) {
+        const x = i;
+        const y = data[i].close;
+        sumX += x;
+        sumY += y;
+        sumXY += x * y;
+        sumX2 += x * x;
+    }
+
+    const denominator = n * sumX2 - sumX * sumX;
+    const slope = denominator === 0 ? 0 : (n * sumXY - sumX * sumY) / denominator;
+    const intercept = (sumY - slope * sumX) / n;
+
+    const points = [];
+    let cursor = new Date(data[data.length - 1].dateObj.getTime());
+    for (let i = 1; i <= horizon; i += 1) {
+        cursor = nextMarketDay(cursor);
+        const futureIndex = n - 1 + i;
+        const estimated = slope * futureIndex + intercept;
+        points.push({ date: toISODate(cursor), value: estimated });
+    }
+
+    return { points, slope, intercept };
+}
+
+function nextMarketDay(date) {
+    const candidate = new Date(date.getTime());
+    candidate.setDate(candidate.getDate() + 1);
+    let day = candidate.getUTCDay();
+    if (day === 6) {
+        candidate.setDate(candidate.getDate() + 2);
+    } else if (day === 0) {
+        candidate.setDate(candidate.getDate() + 1);
+    }
+    return candidate;
+}
+
+function toISODate(date) {
+    return date.toISOString().split("T")[0];
+}
+
+function buildTrendText(slope) {
+    const dailyChange = slope;
+    const direction = dailyChange > 0.05 ? "↑" : dailyChange < -0.05 ? "↓" : "→";
+    return `${direction} ${dailyChange.toFixed(2)} USD/day`;
 }
 
 function clearChart() {
