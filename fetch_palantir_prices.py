@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Download Palantir daily OHLC data for the past 365 days from Yahoo Finance."""
 
-import csv
 import datetime as dt
 import json
 import sys
@@ -59,10 +58,11 @@ def fetch_history(ticker: str, days: int = 365):
     highs = quote.get("high") or []
     lows = quote.get("low") or []
     closes = quote.get("close") or []
+    volumes = quote.get("volume") or []
 
     records = []
-    for ts, o, h, l, c in zip(timestamps, opens, highs, lows, closes):
-        if None in (ts, o, h, l, c):
+    for ts, o, h, l, c, v in zip(timestamps, opens, highs, lows, closes, volumes):
+        if None in (ts, o, h, l, c, v):
             continue
         date_str = dt.datetime.fromtimestamp(ts, tz=dt.timezone.utc).date().isoformat()
         records.append(
@@ -72,6 +72,7 @@ def fetch_history(ticker: str, days: int = 365):
                 "high": float(h),
                 "low": float(l),
                 "close": float(c),
+                "volume": float(v),
             }
         )
 
@@ -104,11 +105,11 @@ def main():
         print(f"Failed to write CSV file: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    print("Date        Open      High      Low       Close")
+    print("Date        Open      High      Low       Close     Volume")
     for record in records:
         print(
             f"{record['date']}  "
-            f"{record['open']:<9.2f}{record['high']:<9.2f}{record['low']:<9.2f}{record['close']:<9.2f}"
+            f"{record['open']:<9.2f}{record['high']:<9.2f}{record['low']:<9.2f}{record['close']:<9.2f}{int(round(record['volume'])):>11}"
         )
 
 if __name__ == "__main__":

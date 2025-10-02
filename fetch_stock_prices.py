@@ -61,10 +61,11 @@ def fetch_history(ticker: str, days: int):
     highs = quote.get("high") or []
     lows = quote.get("low") or []
     closes = quote.get("close") or []
+    volumes = quote.get("volume") or []
 
     records = []
-    for ts, o, h, l, c in zip(timestamps, opens, highs, lows, closes):
-        if None in (ts, o, h, l, c):
+    for ts, o, h, l, c, v in zip(timestamps, opens, highs, lows, closes, volumes):
+        if None in (ts, o, h, l, c, v):
             continue
         date_str = dt.datetime.fromtimestamp(ts, tz=dt.timezone.utc).date().isoformat()
         records.append(
@@ -74,6 +75,7 @@ def fetch_history(ticker: str, days: int):
                 "high": float(h),
                 "low": float(l),
                 "close": float(c),
+                "volume": float(v),
             }
         )
 
@@ -86,7 +88,7 @@ def fetch_history(ticker: str, days: int):
 def write_csv(records, path: Path) -> None:
     with path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["Date", "Open", "High", "Low", "Close"])
+        writer.writerow(["Date", "Open", "High", "Low", "Close", "Volume"])
         for record in records:
             writer.writerow(
                 [
@@ -95,6 +97,7 @@ def write_csv(records, path: Path) -> None:
                     f"{record['high']:.2f}",
                     f"{record['low']:.2f}",
                     f"{record['close']:.2f}",
+                    str(int(round(record["volume"]))),
                 ]
             )
 

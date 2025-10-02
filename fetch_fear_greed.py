@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Download CNN Fear & Greed index values for the past 365 days."""
 
+import argparse
 import csv
 import datetime as dt
 import json
@@ -181,10 +182,31 @@ def write_csv(records, path: str) -> None:
             writer.writerow([record["date"], record["rating"], record["description"]])
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Download CNN Fear & Greed index history.")
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=365,
+        help="Number of past calendar days to include (default: 365)",
+    )
+    parser.add_argument(
+        "--output",
+        default="fear_greed_index.csv",
+        help="Where to write the CSV file (default: fear_greed_index.csv)",
+    )
+    return parser.parse_args()
+
+
 def main():
-    output_path = "fear_greed_index.csv"
+    args = parse_args()
+    if args.days <= 0:
+        print("--days must be a positive integer", file=sys.stderr)
+        return 1
+
+    output_path = args.output
     try:
-        records = fetch_index_history()
+        records = fetch_index_history(days=args.days)
     except RuntimeError as exc:
         print(exc, file=sys.stderr)
         sys.exit(1)
@@ -204,4 +226,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

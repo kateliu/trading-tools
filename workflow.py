@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 try:
     import fetch_stock_prices
@@ -23,6 +23,9 @@ DEFAULT_DAYS = 365
 DEFAULT_PRICE_CSV = Path("palantir_prices.csv")
 DEFAULT_SENTIMENT_CSV = Path("fear_greed_index.csv")
 WEB_DATA_DIR = Path("web/data")
+DEFAULT_MODEL_PATH = Path("models/lstm_pltr.pt")
+DEFAULT_METADATA_PATH = Path("models/lstm_pltr.json")
+DEFAULT_FORECAST_JSON = WEB_DATA_DIR / "ai_forecast.json"
 
 
 def log(message: str) -> None:
@@ -72,6 +75,51 @@ def run_plot_script(python_executable: Path | str = sys.executable) -> None:
         raise SystemExit(exc.returncode) from exc
 
 
+def run_training(
+    python_executable: Path | str,
+    ticker: str,
+    price_csv: Path,
+    sentiment_csv: Optional[Path],
+    args: argparse.Namespace,
+) -> None:
+    log("Training neural network forecaster …")
+    cmd = [
+        str(python_executable),
+        "train_lstm.py",
+        "--ticker",
+        ticker,
+        "--price-csv",
+        str(price_csv),
+        "--lookback",
+        str(args.lookback),
+        "--epochs",
+        str(args.epochs),
+        "--batch-size",
+        str(args.batch_size),
+        "--learning-rate",
+        str(args.learning_rate),
+        "--forecast-days",
+        str(args.forecast_days),
+        "--output-model",
+        str(args.model_output),
+        "--output-metadata",
+        str(args.metadata_output),
+        "--forecast-json",
+        str(args.forecast_json),
+        "--device",
+        args.device,
+    ]
+
+    if sentiment_csv is not None:
+        cmd.extend(["--sentiment-csv", str(sentiment_csv)])
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as exc:  # pragma: no cover
+        log("train_lstm.py failed; see details above.")
+        raise SystemExit(exc.returncode) from exc
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="End-to-end workflow for fetching Palantir data and updating artifacts.",
@@ -116,6 +164,45 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path(sys.executable),
         help="Python interpreter to use when spawning helper scripts.",
     )
+    parser.add_argument(
+        "--train-model",
+        action="store_true",
+        help="Train the neural network forecaster after refreshing data.",
+    )
+    parser.add_argument("--lookback", type=int, default=60, help="Lookback window for model training (default: 60)")
+    parser.add_argument("--epochs", type=int, default=50, help="Training epochs for the model (default: 50)")
+    parser.add_argument(
+        "--batch-size", type=int, default=32, help="Mini-batch size for training (default: 32)"
+    )
+    parser.add_argument(
+        "--learning-rate", type=float, default=1e-3, help="Optimizer learning rate (default: 1e-3)"
+    )
+    parser.add_argument(
+        "--forecast-days", type=int, default=30, help="Forecast horizon to generate (default: 30 days)"
+    )
+    parser.add_argument(
+        "--model-output",
+        type=Path,
+        default=DEFAULT_MODEL_PATH,
+        help="Where to store the trained model weights.",
+    )
+    parser.add_argument(
+        "--metadata-output",
+        type=Path,
+        default=DEFAULT_METADATA_PATH,
+        help="Where to store training metadata/scaler information.",
+    )
+    parser.add_argument(
+        "--forecast-json",
+        type=Path,
+        default=DEFAULT_FORECAST_JSON,
+        help="Path for saving AI forecast JSON for the dashboard.",
+    )
+    parser.add_argument(
+        "--device",
+        default="cpu",
+        help="Torch device spec to pass through to the trainer (default: cpu).",
+    )
     return parser
 
 
@@ -139,6 +226,9 @@ def main(argv: list[str] | None = None) -> int:
         if sentiment_csv is not None:
             sync_targets.append(sentiment_csv)
         sync_to_web(sync_targets)
+
+    if args.train_model:
+        run_training(args.python, ticker, price_csv, sentiment_csv, args)
 
     if not args.skip_plot:
         run_plot_script(args.python)
