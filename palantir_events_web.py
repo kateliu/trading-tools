@@ -53,7 +53,7 @@ def load_price_data(path: Path) -> pd.DataFrame:
 
 def select_events(df: pd.DataFrame, threshold: float) -> pd.DataFrame:
     mask = df["log_return"].abs() >= threshold
-    return df.loc[mask].copy()
+    return df.loc[mask].sort_values("Date", ascending=False).copy()
 
 
 def build_payload(df: pd.DataFrame, events: pd.DataFrame) -> Dict[str, object]:
@@ -175,8 +175,8 @@ if (data.events.length === 0) {
     row.appendChild(cell);
     tableBody.appendChild(row);
 } else {
-    for (const event of data.events) {
-        const row = document.createElement('tr');
+        for (const event of data.events) {
+            const row = document.createElement('tr');
 
         const dateCell = document.createElement('td');
         dateCell.textContent = event.date;
