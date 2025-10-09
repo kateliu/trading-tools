@@ -92,7 +92,12 @@ def render_html(dataset: Dict[str, Dict[str, List[Dict[str, float]]]]) -> str:
     .controls { padding: 1rem 1.5rem; display: flex; flex-wrap: wrap; gap: 1.5rem; background: #e5e7eb; }
     .controls label { display: flex; flex-direction: column; font-size: 0.95rem; gap: 0.35rem; }
     .controls select { padding: 0.35rem 0.6rem; border-radius: 6px; border: 1px solid #cbd5f5; font-size: 0.95rem; }
-    #chart { width: 100%; height: calc(100vh - 220px); }
+    #chart { width: 100%; height: calc(60vh); }
+    #hist { width: 100%; height: calc(25vh); }
+    @media (max-height: 700px) {
+        #chart { height: 360px; }
+        #hist { height: 220px; }
+    }
 </style>
 </head>
 <body>
@@ -113,12 +118,14 @@ def render_html(dataset: Dict[str, Dict[str, List[Dict[str, float]]]]) -> str:
     </label>
 </section>
 <div id="chart"></div>
+<div id="hist"></div>
 <script>
 const dataset = __PAYLOAD__;
 const tickers = Object.keys(dataset);
 const tickerSelect = document.getElementById('ticker');
 const metricSelect = document.getElementById('metric');
 const chartDiv = document.getElementById('chart');
+const histDiv = document.getElementById('hist');
 
 function populateTickers() {
     tickers.forEach(ticker => {
@@ -152,6 +159,22 @@ function renderChart() {
         hovermode: 'x unified',
     };
     Plotly.react(chartDiv, [trace], layout, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
+
+    const values = (dataset[ticker] || {})[metric] || [];
+    const histTrace = {
+        x: values.map(point => point.value),
+        type: 'histogram',
+        marker: { color: '#9333ea' },
+        opacity: 0.75,
+        autobinx: true,
+    };
+    const histLayout = {
+        margin: { l: 60, r: 40, t: 40, b: 60 },
+        title: ticker + ' – ' + metric + ' Distribution',
+        xaxis: { title: metric },
+        yaxis: { title: 'Count' },
+    };
+    Plotly.react(histDiv, [histTrace], histLayout, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
 }
 
 populateTickers();
