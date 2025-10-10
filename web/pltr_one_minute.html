@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PLTR Minute Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Palantir 1-Minute Dashboard</h1>
+        <p>Interactive study of intraday price action built from <code>PLTR-one-minute</code> CSV exports.</p>
+    </header>
+
+    <main>
+        <section class="controls">
+            <div class="control-group">
+                <label for="session-picker">Trading day:</label>
+                <select id="session-picker" aria-label="Select trading day"></select>
+            </div>
+            <div class="control-group">
+                <label for="session-range">Show:</label>
+                <select id="session-range">
+                    <option value="full" selected>Full session</option>
+                    <option value="regular">Regular hours (09:30-16:00 ET)</option>
+                </select>
+            </div>
+        </section>
+
+        <section id="chart-container">
+            <div id="chart"></div>
+        </section>
+
+        <section id="status" role="status" aria-live="polite"></section>
+    </main>
+
+    <script type="module" src="pltr_one_minute.js"></script>
+</body>
+</html>
