@@ -29,6 +29,12 @@ def parse_args() -> argparse.Namespace:
         default=10,
         help="Prediction horizon in minutes (default: 10).",
     )
+    parser.add_argument(
+        "--model-output",
+        type=Path,
+        default=Path("models/intraday_linear_model.json"),
+        help="Where to save model coefficients and scaler stats (default: models/intraday_linear_model.json)",
+    )
     return parser.parse_args()
 
 
@@ -141,7 +147,23 @@ def standardize(train: np.ndarray, test: np.ndarray) -> Tuple[np.ndarray, np.nda
     return train_scaled, test_scaled, mean, std
 
 
-def run_training(features: pd.DataFrame, labels: pd.Series) -> None:
+def serialize_model(path: Path, feature_names: List[str], coef: np.ndarray, mean: np.ndarray, std: np.ndarray, horizon: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "horizon": horizon,
+        "feature_names": feature_names,
+        "intercept": float(coef[0]),
+        "coefficients": coef[1:].tolist(),
+        "scaler_mean": mean.tolist(),
+        "scaler_std": std.tolist(),
+    }
+    import json
+
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(f"Saved model parameters to {path}")
+
+
+def run_training(features: pd.DataFrame, labels: pd.Series, horizon: int, model_output: Path) -> None:
     feature_names = features.columns.tolist()
     X = features.values
     y = labels.values
@@ -179,11 +201,13 @@ def run_training(features: pd.DataFrame, labels: pd.Series) -> None:
     for name in feature_names:
         print(f" - {name}")
 
+    serialize_model(model_output, feature_names, coef, mean, std, horizon)
+
 
 def main() -> None:
     args = parse_args()
     features, labels = prepare_dataset(args.data_dir, args.horizon)
-    run_training(features, labels)
+    run_training(features, labels, args.horizon, args.model_output)
 
 
 if __name__ == "__main__":
